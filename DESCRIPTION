@@ -1,0 +1,26 @@
+Package: sdtmgenerator
+Title: Generate and Validate CDISC SDTM Clinical Trial Datasets
+Version: 0.1.0
+Authors@R:
+    person("Jean", "Mendes", role = c("aut", "cre"),
+           email = "jeanmlvieira@hotmail.com")
+Description: Provides a modular framework for transforming synthetic
+    clinical trial source data into datasets aligned with the Clinical
+    Data Interchange Standards Consortium (CDISC) Study Data Tabulation
+    Model (SDTM). Supports domain-specific transformations, variable
+    mapping, data validation, and reproducible clinical data workflows.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Imports:
+    readr,
+    tibble
+Suggests:
+    devtools,
+    roxygen2,
+    testthat (>= 3.0.0),
+    usethis,
+    knitr,
+    rmarkdown
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.1

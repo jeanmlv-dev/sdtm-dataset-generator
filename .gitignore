@@ -1,0 +1,45 @@
+# R session files
+.RData
+.Rhistory
+.Ruserdata
+.Rproj.user/
+
+# Generated pipeline outputs
+outputs/
+
+# R package build artifacts
+*.tar.gz
+*.Rcheck/
+
+# Local renv library
+renv/library/
+renv/staging/
+
+# R session files
+.Rhistory
+.RData
+.Ruserdata
+.Rapp.history
+
+# RStudio
+.Rproj.user/
+
+# renv local libraries
+renv/library/
+renv/staging/
+renv/local/
+renv/cellar/
+
+# Package build artifacts
+*.tar.gz
+*.Rcheck/
+
+# Generated pipeline outputs
+outputs/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# IDE configuration
+.vscode/

@@ -1,0 +1,11 @@
+^renv$
+^renv\.lock$
+^LICENSE\.md$
+^docs$
+^outputs$
+^scripts$
+^renv$
+^renv\.lock$
+^\.Rprofile$
+^\.github$
+^README\.md$
