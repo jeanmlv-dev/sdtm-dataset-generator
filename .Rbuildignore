@@ -9,3 +9,4 @@
 ^\.Rprofile$
 ^\.github$
 ^README\.md$
+^\.lintr$

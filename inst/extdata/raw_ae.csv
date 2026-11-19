@@ -1,0 +1,12 @@
+
+subject_id,site_id,event_id,event_term,severity,serious,relationship,outcome,start_date,end_date
+001,101,AE001,Headache,Mild,No,Related,Recovered,2026-01-03,2026-01-05
+001,101,AE002,Nausea,Moderate,No,Related,Recovered,2026-01-08,2026-01-10
+002,101,AE003,Fatigue,Mild,No,Not Related,Recovered,2026-01-05,2026-01-07
+003,101,AE004,Abdominal pain,Moderate,No,Related,Recovering,2026-01-06,
+003,101,AE005,Diarrhea,Mild,No,Not Related,Recovered,2026-01-09,2026-01-12
+004,101,AE006,Dizziness,Mild,No,Related,Recovered,2026-01-07,2026-01-08
+005,101,AE007,Headache,Moderate,No,Related,Recovered,2026-01-10,2026-01-12
+006,102,AE008,Pneumonia,Severe,Yes,Not Related,Recovering,2026-01-15,
+001,101,AE009,Fatigue,Mild,No,Not Related,Recovered,2025-12-30,2025-12-31
+002,101,AE010,Nausea,Moderate,No,Related,Not Recovered,2026-01-02,
