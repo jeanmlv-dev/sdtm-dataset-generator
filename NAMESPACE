@@ -2,10 +2,13 @@
 
 export(generate_ae)
 export(generate_dm)
+export(generate_lb)
 export(generate_vs)
 export(run_ae_pipeline)
 export(run_dm_pipeline)
+export(run_lb_pipeline)
 export(run_vs_pipeline)
 export(validate_ae)
 export(validate_dm)
+export(validate_lb)
 export(validate_vs)
