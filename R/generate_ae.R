@@ -7,7 +7,10 @@
 #'
 #' @param raw_data A data.frame containing raw adverse events.
 #' @param dm A data.frame containing the generated DM dataset.
-#'
+#' @param mapping_path Optional path to a metadata mapping CSV file.
+#'   When NULL, the legacy AE generation logic is used.
+#'   When provided, the metadata-driven mapping workflow is enabled.
+#' 
 #' @return A tibble containing mapped AE variables.
 #'
 #' @details
@@ -29,7 +32,7 @@
 #' and does not perform official MedDRA coding.
 #'
 #' @export
-generate_ae <- function(raw_data, dm) {
+generate_ae <- function(raw_data, dm, mapping_path = NULL) {
 
   # -------------------------------------------------------
   # 1. Validate input structure
@@ -182,8 +185,9 @@ generate_ae <- function(raw_data, dm) {
     )
   }
 
+ 
   # -------------------------------------------------------
-  # 5. Apply explicit controlled value mappings
+  # 5. Define controlled terminology dictionaries
   # -------------------------------------------------------
 
   severity_lookup <- c(
@@ -210,6 +214,7 @@ generate_ae <- function(raw_data, dm) {
 
   # Synthetic coding dictionary.
   # Not an official MedDRA implementation.
+
   term_lookup <- c(
     "Headache" = "HEADACHE",
     "Nausea" = "NAUSEA",
@@ -220,40 +225,331 @@ generate_ae <- function(raw_data, dm) {
     "Pneumonia" = "PNEUMONIA"
   )
 
-  aeterm <- as.character(raw_data$event_term)
+  # -------------------------------------------------------
+  # 6. Execute legacy or metadata-driven mapping
+  # -------------------------------------------------------
 
-  aedecod <- map_controlled_values(
-    aeterm,
-    term_lookup,
-    "event_term"
-  )
+  if (is.null(mapping_path)) {
 
-  aesev <- map_controlled_values(
-    raw_data$severity,
-    severity_lookup,
-    "severity"
-  )
+    # -----------------------------------------------------
+    # 6.1. Legacy mapping
+    # -----------------------------------------------------
 
-  aeser <- map_controlled_values(
-    raw_data$serious,
-    serious_lookup,
-    "serious"
-  )
+    aeterm <- as.character(raw_data$event_term)
 
-  aerel <- map_controlled_values(
-    raw_data$relationship,
-    relationship_lookup,
-    "relationship"
-  )
+    aedecod <- map_controlled_values(
+      aeterm,
+      term_lookup,
+      "event_term"
+    )
 
-  aeout <- map_controlled_values(
-    raw_data$outcome,
-    outcome_lookup,
-    "outcome"
-  )
+    aesev <- map_controlled_values(
+      raw_data$severity,
+      severity_lookup,
+      "severity"
+    )
+
+    aeser <- map_controlled_values(
+      raw_data$serious,
+      serious_lookup,
+      "serious"
+    )
+
+    aerel <- map_controlled_values(
+      raw_data$relationship,
+      relationship_lookup,
+      "relationship"
+    )
+
+    aeout <- map_controlled_values(
+      raw_data$outcome,
+      outcome_lookup,
+      "outcome"
+    )
+
+    mapped_study_id <- study_id
+
+    mapped_domain <- rep(
+      "AE",
+      nrow(raw_data)
+    )
+
+  } else {
+
+    # -----------------------------------------------------
+    # 6.2. Read metadata mapping specification
+    # -----------------------------------------------------
+
+    mapping <- read_mapping(mapping_path)
+
+    # Ensure that the mapping specification belongs to AE.
+
+    if (anyNA(mapping$domain) ||
+        any(mapping$domain != "AE")) {
+      stop(
+        "Mapping specification must belong to AE.",
+        call. = FALSE
+      )
+    }
+
+    # -----------------------------------------------------
+    # 6.3. Validate required mapping targets
+    # -----------------------------------------------------
+
+    required_targets <- c(
+      "STUDYID",
+      "DOMAIN",
+      "AETERM",
+      "AEDECOD",
+      "AESEV",
+      "AESER",
+      "AEREL",
+      "AEOUT",
+      "AESTDTC",
+      "AEENDTC"
+    )
+
+    missing_targets <- setdiff(
+      required_targets,
+      mapping$target_variable
+    )
+
+    if (length(missing_targets) > 0L) {
+      stop(
+        paste(
+          "Missing AE mapping targets:",
+          paste(
+            missing_targets,
+            collapse = ", "
+          )
+        ),
+        call. = FALSE
+      )
+    }
+
+    # Reject unsupported targets to avoid silently
+    # ignoring metadata rules.
+
+    unsupported_targets <- setdiff(
+      mapping$target_variable,
+      required_targets
+    )
+
+    if (length(unsupported_targets) > 0L) {
+      stop(
+        paste(
+          "Unsupported AE mapping targets:",
+          paste(
+            unsupported_targets,
+            collapse = ", "
+          )
+        ),
+        call. = FALSE
+      )
+    }
+
+    # -----------------------------------------------------
+    # 6.4. Configure terminology dictionaries
+    # -----------------------------------------------------
+
+    terminology <- list(
+      term = term_lookup,
+      severity = severity_lookup,
+      serious = serious_lookup,
+      relationship = relationship_lookup,
+      outcome = outcome_lookup
+    )
+
+    # -----------------------------------------------------
+    # 6.5. Normalize source data
+    # -----------------------------------------------------
+
+    # Preserve the original source dataset.
+
+    mapping_data <- raw_data
+
+    mapping_data$subject_id <- subject_id
+    mapping_data$site_id <- site_id
+    mapping_data$event_id <- event_id
+
+    mapping_data$event_term <- as.character(
+      raw_data$event_term
+    )
+
+    mapping_data$severity <- as.character(
+      raw_data$severity
+    )
+
+    mapping_data$serious <- as.character(
+      raw_data$serious
+    )
+
+    mapping_data$relationship <- as.character(
+      raw_data$relationship
+    )
+
+    mapping_data$outcome <- as.character(
+      raw_data$outcome
+    )
+
+    mapping_data$start_date <- format(
+      start_date,
+      "%Y-%m-%d"
+    )
+
+    mapping_data$end_date <- format(
+      end_date,
+      "%Y-%m-%d"
+    )
+
+    # -----------------------------------------------------
+    # 6.6. Validate metadata and source compatibility
+    # -----------------------------------------------------
+
+    validate_mapping(
+      mapping = mapping,
+      raw_data = mapping_data,
+      terminology = terminology
+    )
+
+    # -----------------------------------------------------
+    # 6.7. Execute metadata-driven mapping engine
+    # -----------------------------------------------------
+
+    mapped_ae <- apply_mapping(
+      raw_data = mapping_data,
+      mapping = mapping,
+      study_id = as.character(
+        unique(dm$STUDYID)
+      ),
+      terminology = terminology
+    )
+
+    # -----------------------------------------------------
+    # 6.8. Validate mapped record counts
+    # -----------------------------------------------------
+
+    if (nrow(mapped_ae) != nrow(raw_data)) {
+      stop(
+        "Metadata mapping changed the AE record count.",
+        call. = FALSE
+      )
+    }
+
+    # -----------------------------------------------------
+    # 6.9. Validate mapped identifiers
+    # -----------------------------------------------------
+
+    mapped_study_id <- as.character(
+      mapped_ae$STUDYID
+    )
+
+    mapped_domain <- as.character(
+      mapped_ae$DOMAIN
+    )
+
+    if (anyNA(mapped_study_id) ||
+        any(mapped_study_id != study_id)) {
+      stop(
+        "Mapped STUDYID is inconsistent with DM.",
+        call. = FALSE
+      )
+    }
+
+    if (anyNA(mapped_domain) ||
+        any(mapped_domain != "AE")) {
+      stop(
+        "Mapped DOMAIN must be AE.",
+        call. = FALSE
+      )
+    }
+
+    # -----------------------------------------------------
+    # 6.10. Extract mapped AE variables
+    # -----------------------------------------------------
+
+    aeterm <- as.character(mapped_ae$AETERM)
+    aedecod <- as.character(mapped_ae$AEDECOD)
+    aesev <- as.character(mapped_ae$AESEV)
+    aeser <- as.character(mapped_ae$AESER)
+    aerel <- as.character(mapped_ae$AEREL)
+    aeout <- as.character(mapped_ae$AEOUT)
+
+    # -----------------------------------------------------
+    # 6.11. Validate mapped terminology
+    # -----------------------------------------------------
+
+    check_required_values(aeterm, "AETERM")
+    check_required_values(aedecod, "AEDECOD")
+    check_required_values(aesev, "AESEV")
+    check_required_values(aeser, "AESER")
+    check_required_values(aerel, "AEREL")
+    check_required_values(aeout, "AEOUT")
+
+    if (any(!aedecod %in% unname(term_lookup))) {
+      stop(
+        "Unsupported mapped AEDECOD values.",
+        call. = FALSE
+      )
+    }
+
+    if (any(!aesev %in% unname(severity_lookup))) {
+      stop(
+        "Unsupported mapped AESEV values.",
+        call. = FALSE
+      )
+    }
+
+    if (any(!aeser %in% unname(serious_lookup))) {
+      stop(
+        "Unsupported mapped AESER values.",
+        call. = FALSE
+      )
+    }
+
+    if (any(!aerel %in% unname(relationship_lookup))) {
+      stop(
+        "Unsupported mapped AEREL values.",
+        call. = FALSE
+      )
+    }
+
+    if (any(!aeout %in% unname(outcome_lookup))) {
+      stop(
+        "Unsupported mapped AEOUT values.",
+        call. = FALSE
+      )
+    }
+
+    # -----------------------------------------------------
+    # 6.12. Validate mapped event dates
+    # -----------------------------------------------------
+
+    start_date <- parse_iso_date(
+      mapped_ae$AESTDTC,
+      "AESTDTC",
+      allow_missing = FALSE
+    )
+
+    end_date <- parse_iso_date(
+      mapped_ae$AEENDTC,
+      "AEENDTC",
+      allow_missing = TRUE
+    )
+
+    invalid_dates <- !is.na(end_date) &
+      end_date < start_date
+
+    if (any(invalid_dates)) {
+      stop(
+        "Mapped event end date must not precede start date.",
+        call. = FALSE
+      )
+    }
+  }
 
   # -------------------------------------------------------
-  # 6. Derive study days
+  # 7. Derive clinical variables and build AE dataset
   # -------------------------------------------------------
 
   aestdy <- derive_study_day(
@@ -266,13 +562,9 @@ generate_ae <- function(raw_data, dm) {
     reference_date
   )
 
-  # -------------------------------------------------------
-  # 7. Build AE dataset
-  # -------------------------------------------------------
-
   ae <- tibble::tibble(
-    STUDYID = study_id,
-    DOMAIN = rep("AE", nrow(raw_data)),
+    STUDYID = mapped_study_id,
+    DOMAIN = mapped_domain,
     USUBJID = usubjid,
     AESEQ = rep(NA_integer_, nrow(raw_data)),
     AETERM = aeterm,

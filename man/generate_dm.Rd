@@ -4,12 +4,15 @@
 \alias{generate_dm}
 \title{Generate an SDTM-like Demographics (DM) Dataset}
 \usage{
-generate_dm(raw_data, study_id)
+generate_dm(raw_data, study_id, mapping_path = NULL)
 }
 \arguments{
 \item{raw_data}{A data.frame containing raw demographics.}
 
 \item{study_id}{A non-empty study identifier.}
+
+\item{mapping_path}{Optional path to a mapping metadata CSV.
+If NULL, the original mapping logic is used.}
 }
 \value{
 A tibble containing mapped DM variables.
@@ -19,15 +22,30 @@ Transforms synthetic raw clinical trial demographics into a
 standardized subset of CDISC SDTM DM variables.
 }
 \details{
-This function implements explicit mapping and structural checks.
-It does not establish full CDISC SDTM compliance.
+Supports two execution modes:
+\itemize{
+\item Legacy mode: uses the original hard-coded mapping rules.
+\item Metadata-driven mode: uses CSV mapping metadata through
+read_mapping(), validate_mapping(), and apply_mapping().
+}
+
+Both modes preserve the same DM output structure.
+
+This function does not establish full CDISC SDTM compliance.
 
 Required raw columns:
 subject_id, site_id, age, sex, arm, rfstdtc.
 
+The output contains:
+STUDYID, DOMAIN, USUBJID, SUBJID, SITEID, RFSTDTC,
+AGE, AGEU, SEX, ARMCD, ARM.
+
 Subject identifiers must be unique within the supplied study.
 Dates must be missing or valid ISO 8601 calendar dates
 in YYYY-MM-DD format.
+
+In metadata-driven mode, domain-specific derived variables
+are calculated after applying the mapping rules.
 }
 \examples{
 raw <- data.frame(

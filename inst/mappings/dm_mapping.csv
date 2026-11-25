@@ -1,0 +1,12 @@
+domain,source_variable,target_variable,transformation,parameter,required
+DM,NA,STUDYID,constant,study_id,TRUE
+DM,NA,DOMAIN,constant,DM,TRUE
+DM,subject_id,USUBJID,direct,NA,TRUE
+DM,subject_id,SUBJID,direct,NA,TRUE
+DM,site_id,SITEID,direct,NA,TRUE
+DM,rfstdtc,RFSTDTC,direct,NA,FALSE
+DM,age,AGE,direct,NA,FALSE
+DM,NA,AGEU,constant,YEARS,TRUE
+DM,sex,SEX,terminology_map,sex,TRUE
+DM,arm,ARMCD,terminology_map,arm,TRUE
+DM,arm,ARM,direct,NA,TRUE

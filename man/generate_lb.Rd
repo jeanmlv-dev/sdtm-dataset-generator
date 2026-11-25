@@ -4,12 +4,16 @@
 \alias{generate_lb}
 \title{Generate an SDTM-like Laboratory Test Results Dataset}
 \usage{
-generate_lb(raw_data, dm)
+generate_lb(raw_data, dm, mapping_path = NULL)
 }
 \arguments{
 \item{raw_data}{A data.frame containing raw laboratory data.}
 
 \item{dm}{A validated DM dataset.}
+
+\item{mapping_path}{Optional path to a metadata mapping CSV file.
+When NULL, the legacy LB generation logic is used.
+When provided, the metadata-driven mapping workflow is enabled.}
 }
 \value{
 A data.frame containing standardized LB records.
@@ -19,10 +23,13 @@ Transforms synthetic raw laboratory measurements into a
 standardized LB dataset using the DM domain as reference.
 }
 \details{
+Supports both legacy and metadata-driven mapping workflows.
+
 Features:
 \itemize{
 \item Required-column and source-data validation
 \item Subject-level referential integrity with DM
+\item Metadata-driven variable mapping
 \item Controlled laboratory test terminology
 \item Original and standardized results
 \item Laboratory reference ranges
