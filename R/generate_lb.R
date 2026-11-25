@@ -4,9 +4,12 @@
 #' Transforms synthetic raw laboratory measurements into a
 #' standardized LB dataset using the DM domain as reference.
 #'
+#' Supports both legacy and metadata-driven mapping workflows.
+#'
 #' Features:
 #' - Required-column and source-data validation
 #' - Subject-level referential integrity with DM
+#' - Metadata-driven variable mapping
 #' - Controlled laboratory test terminology
 #' - Original and standardized results
 #' - Laboratory reference ranges
@@ -21,10 +24,14 @@
 #'
 #' @param raw_data A data.frame containing raw laboratory data.
 #' @param dm A validated DM dataset.
+#' @param mapping_path Optional path to a metadata mapping CSV file.
+#'   When NULL, the legacy LB generation logic is used.
+#'   When provided, the metadata-driven mapping workflow is enabled.
 #'
 #' @return A data.frame containing standardized LB records.
+#'
 #' @export
-generate_lb <- function(raw_data, dm) {
+generate_lb <- function(raw_data, dm, mapping_path = NULL) {
 
   # -------------------------------------------------------
   # 1. Validate source structure
@@ -65,11 +72,19 @@ generate_lb <- function(raw_data, dm) {
 
   validate_dm(dm)
 
+  if (length(unique(dm$STUDYID)) != 1L) {
+    stop(
+      "DM must contain exactly one study.",
+      call. = FALSE
+    )
+  }
+
   # -------------------------------------------------------
-  # 2. Validate identifiers
+  # 2. Validate source identifiers
   # -------------------------------------------------------
 
   check_text <- function(x, label) {
+
     if (
       !is.character(x) ||
       anyNA(x) ||
@@ -82,35 +97,37 @@ generate_lb <- function(raw_data, dm) {
     }
   }
 
-for (field in c(
-  "subject_id",
-  "site_id",
-  "lab_id",
-  "lab_test",
-  "unit",
-  "visit"
-)) {
-  check_text(raw_data[[field]], field)
-}
+  for (field in c(
+    "subject_id",
+    "site_id",
+    "lab_id",
+    "lab_test",
+    "unit",
+    "visit"
+  )) {
+    check_text(raw_data[[field]], field)
+  }
 
-if (!inherits(raw_data$collection_date, "Date") &&
-    !is.character(raw_data$collection_date)) {
-  stop(
-    "collection_date must be a character or Date column.",
-    call. = FALSE
+  if (
+    !inherits(raw_data$collection_date, "Date") &&
+    !is.character(raw_data$collection_date)
+  ) {
+    stop(
+      "collection_date must be a character or Date column.",
+      call. = FALSE
+    )
+  }
+
+  if (anyNA(raw_data$collection_date)) {
+    stop(
+      "collection_date contains missing values.",
+      call. = FALSE
+    )
+  }
+
+  raw_data$collection_date <- as.character(
+    raw_data$collection_date
   )
-}
-
-if (anyNA(raw_data$collection_date)) {
-  stop(
-    "collection_date contains missing values.",
-    call. = FALSE
-  )
-}
-
-raw_data$collection_date <- as.character(
-  raw_data$collection_date
-)
 
   if (anyDuplicated(raw_data$lab_id)) {
     stop(
@@ -135,9 +152,28 @@ raw_data$collection_date <- as.character(
   # 3. Match LB subjects to DM
   # -------------------------------------------------------
 
+  dm_key <- paste(
+    dm$SITEID,
+    dm$SUBJID,
+    sep = "|"
+  )
+
+  raw_key <- paste(
+    raw_data$site_id,
+    raw_data$subject_id,
+    sep = "|"
+  )
+
+  if (anyDuplicated(dm_key)) {
+    stop(
+      "Duplicate subject keys detected in DM.",
+      call. = FALSE
+    )
+  }
+
   dm_index <- match(
-    paste(raw_data$site_id, raw_data$subject_id, sep = "|"),
-    paste(dm$SITEID, dm$SUBJID, sep = "|")
+    raw_key,
+    dm_key
   )
 
   if (anyNA(dm_index)) {
@@ -147,14 +183,25 @@ raw_data$collection_date <- as.character(
     )
   }
 
+  study_id <- as.character(
+    unique(dm$STUDYID)
+  )
+
   # -------------------------------------------------------
   # 4. Controlled laboratory terminology
   # -------------------------------------------------------
 
   test_dictionary <- data.frame(
+
     LBTESTCD = c(
-      "HGB", "WBC", "PLAT", "CREAT", "ALT", "CRP"
+      "HGB",
+      "WBC",
+      "PLAT",
+      "CREAT",
+      "ALT",
+      "CRP"
     ),
+
     LBTEST = c(
       "Hemoglobin",
       "Leukocytes",
@@ -163,6 +210,7 @@ raw_data$collection_date <- as.character(
       "Alanine Aminotransferase",
       "C-Reactive Protein"
     ),
+
     LBCAT = c(
       "HEMATOLOGY",
       "HEMATOLOGY",
@@ -171,6 +219,7 @@ raw_data$collection_date <- as.character(
       "CHEMISTRY",
       "CHEMISTRY"
     ),
+
     LBSTRESU = c(
       "g/dL",
       "10^9/L",
@@ -179,6 +228,7 @@ raw_data$collection_date <- as.character(
       "U/L",
       "mg/L"
     ),
+
     LBSPEC = c(
       "BLOOD",
       "BLOOD",
@@ -187,6 +237,7 @@ raw_data$collection_date <- as.character(
       "SERUM",
       "SERUM"
     ),
+
     stringsAsFactors = FALSE
   )
 
@@ -207,6 +258,7 @@ raw_data$collection_date <- as.character(
   # -------------------------------------------------------
 
   parse_numeric <- function(x, label) {
+
     if (!is.numeric(x) && !is.character(x)) {
       stop(
         paste(label, "must be numeric or numeric text."),
@@ -214,9 +266,14 @@ raw_data$collection_date <- as.character(
       )
     }
 
-    values <- suppressWarnings(as.numeric(x))
+    values <- suppressWarnings(
+      as.numeric(x)
+    )
 
-    if (anyNA(values) || any(!is.finite(values))) {
+    if (
+      anyNA(values) ||
+      any(!is.finite(values))
+    ) {
       stop(
         paste(label, "must contain finite numeric values."),
         call. = FALSE
@@ -248,7 +305,9 @@ raw_data$collection_date <- as.character(
     )
   }
 
-  expected_units <- test_dictionary$LBSTRESU[test_index]
+  expected_units <- test_dictionary$LBSTRESU[
+    test_index
+  ]
 
   if (any(raw_data$unit != expected_units)) {
     stop(
@@ -257,28 +316,8 @@ raw_data$collection_date <- as.character(
     )
   }
 
-  # All synthetic source units already match the
-  # standardized units, so no conversion is required.
-  standardized_numeric <- result_numeric
-  standardized_lower <- lower_numeric
-  standardized_upper <- upper_numeric
-
   # -------------------------------------------------------
-  # 6. Derive normal-range indicators
-  # -------------------------------------------------------
-
-  normal_indicator <- ifelse(
-    standardized_numeric < standardized_lower,
-    "LOW",
-    ifelse(
-      standardized_numeric > standardized_upper,
-      "HIGH",
-      "NORMAL"
-    )
-  )
-
-  # -------------------------------------------------------
-  # 7. Validate and parse collection dates
+  # 6. Validate and parse collection dates
   # -------------------------------------------------------
 
   collection_dates <- suppressWarnings(
@@ -296,6 +335,7 @@ raw_data$collection_date <- as.character(
   valid_dates[is.na(valid_dates)] <- FALSE
 
   if (any(valid_dates)) {
+
     valid_dates[valid_dates] <-
       format(
         collection_dates[valid_dates],
@@ -311,7 +351,399 @@ raw_data$collection_date <- as.character(
   }
 
   # -------------------------------------------------------
-  # 8. Derive study days
+  # 7. Select mapping workflow
+  # -------------------------------------------------------
+
+  if (is.null(mapping_path)) {
+
+    # -----------------------------------------------------
+    # 7.1 Legacy mapping workflow
+    # -----------------------------------------------------
+
+    mapped_lb <- data.frame(
+
+      STUDYID = dm$STUDYID[dm_index],
+
+      DOMAIN = rep(
+        "LB",
+        nrow(raw_data)
+      ),
+
+      LBTESTCD = test_dictionary$LBTESTCD[
+        test_index
+      ],
+
+      LBTEST = test_dictionary$LBTEST[
+        test_index
+      ],
+
+      LBCAT = test_dictionary$LBCAT[
+        test_index
+      ],
+
+      LBSPEC = test_dictionary$LBSPEC[
+        test_index
+      ],
+
+      VISIT = raw_data$visit,
+
+      VISITNUM = raw_data$visitnum,
+
+      LBORRES = as.character(
+        raw_data$result
+      ),
+
+      LBORRESU = raw_data$unit,
+
+      LBORNRLO = lower_numeric,
+
+      LBORNRHI = upper_numeric,
+
+      LBDTC = format(
+        collection_dates,
+        "%Y-%m-%d"
+      ),
+
+      stringsAsFactors = FALSE
+    )
+
+  } else {
+
+    # -----------------------------------------------------
+    # 7.2 Metadata-driven mapping workflow
+    # -----------------------------------------------------
+
+    mapping <- read_mapping(
+      mapping_path
+    )
+
+    if (!all(mapping$domain == "LB")) {
+      stop(
+        "Mapping specification must contain only LB rules.",
+        call. = FALSE
+      )
+    }
+
+    required_targets <- c(
+      "STUDYID",
+      "DOMAIN",
+      "LBTESTCD",
+      "LBTEST",
+      "LBCAT",
+      "LBSPEC",
+      "VISIT",
+      "VISITNUM",
+      "LBORRES",
+      "LBORRESU",
+      "LBORNRLO",
+      "LBORNRHI",
+      "LBDTC"
+    )
+
+    missing_targets <- setdiff(
+      required_targets,
+      mapping$target_variable
+    )
+
+    if (length(missing_targets) > 0L) {
+      stop(
+        paste(
+          "Missing LB mapping targets:",
+          paste(missing_targets, collapse = ", ")
+        ),
+        call. = FALSE
+      )
+    }
+
+    unexpected_targets <- setdiff(
+      mapping$target_variable,
+      required_targets
+    )
+
+    if (length(unexpected_targets) > 0L) {
+      stop(
+        paste(
+          "Unsupported LB mapping targets:",
+          paste(unexpected_targets, collapse = ", ")
+        ),
+        call. = FALSE
+      )
+    }
+
+    # -----------------------------------------------------
+    # 7.3 Define terminology dictionaries
+    # -----------------------------------------------------
+
+    terminology <- list(
+
+      lb_test = stats::setNames(
+        test_dictionary$LBTEST,
+        test_dictionary$LBTESTCD
+      ),
+
+      lb_category = stats::setNames(
+        test_dictionary$LBCAT,
+        test_dictionary$LBTESTCD
+      ),
+
+      lb_specimen = stats::setNames(
+        test_dictionary$LBSPEC,
+        test_dictionary$LBTESTCD
+      )
+    )
+
+    # -----------------------------------------------------
+    # 7.4 Prepare normalized mapping source
+    # -----------------------------------------------------
+
+    mapping_data <- raw_data
+
+    mapping_data$result <- as.character(
+      raw_data$result
+    )
+
+    mapping_data$lower_limit <- lower_numeric
+
+    mapping_data$upper_limit <- upper_numeric
+
+    mapping_data$collection_date <- format(
+      collection_dates,
+      "%Y-%m-%d"
+    )
+
+    # -----------------------------------------------------
+    # 7.5 Validate mapping specification
+    # -----------------------------------------------------
+
+    validate_mapping(
+      mapping = mapping,
+      raw_data = mapping_data,
+      terminology = terminology
+    )
+
+    # -----------------------------------------------------
+    # 7.6 Execute metadata mapping engine
+    # -----------------------------------------------------
+
+    mapped_lb <- apply_mapping(
+      raw_data = mapping_data,
+      mapping = mapping,
+      study_id = study_id,
+      terminology = terminology
+    )
+
+    # -----------------------------------------------------
+    # 7.7 Validate mapped structure
+    # -----------------------------------------------------
+
+    if (nrow(mapped_lb) != nrow(raw_data)) {
+      stop(
+        "Mapped LB record count does not match source data.",
+        call. = FALSE
+      )
+    }
+
+    if (
+      anyNA(mapped_lb$STUDYID) ||
+      anyNA(mapped_lb$DOMAIN) ||
+      any(mapped_lb$STUDYID != study_id) ||
+      any(mapped_lb$DOMAIN != "LB")
+    ) {
+      stop(
+        "Mapped LB study or domain identifiers are inconsistent.",
+        call. = FALSE
+      )
+    }
+
+    mapped_lb <- as.data.frame(
+      mapped_lb,
+      stringsAsFactors = FALSE
+    )
+
+    mapped_lb <- mapped_lb[
+      ,
+      required_targets,
+      drop = FALSE
+    ]
+  }
+
+  # -------------------------------------------------------
+  # 8. Validate mapped clinical fields
+  # -------------------------------------------------------
+
+  for (field in c(
+    "LBTESTCD",
+    "LBTEST",
+    "LBCAT",
+    "LBSPEC",
+    "VISIT",
+    "LBORRES",
+    "LBORRESU",
+    "LBDTC"
+  )) {
+
+    mapped_lb[[field]] <- as.character(
+      mapped_lb[[field]]
+    )
+
+    check_text(
+      mapped_lb[[field]],
+      field
+    )
+  }
+
+  mapped_test_index <- match(
+    mapped_lb$LBTESTCD,
+    test_dictionary$LBTESTCD
+  )
+
+  if (anyNA(mapped_test_index)) {
+    stop(
+      "Unsupported mapped laboratory test codes.",
+      call. = FALSE
+    )
+  }
+
+  if (
+    any(
+      mapped_lb$LBTEST !=
+        test_dictionary$LBTEST[mapped_test_index]
+    ) ||
+    any(
+      mapped_lb$LBCAT !=
+        test_dictionary$LBCAT[mapped_test_index]
+    ) ||
+    any(
+      mapped_lb$LBSPEC !=
+        test_dictionary$LBSPEC[mapped_test_index]
+    )
+  ) {
+    stop(
+      "Mapped laboratory terminology is inconsistent.",
+      call. = FALSE
+    )
+  }
+
+  mapped_units <- test_dictionary$LBSTRESU[
+    mapped_test_index
+  ]
+
+  if (any(mapped_lb$LBORRESU != mapped_units)) {
+    stop(
+      "Unsupported or inconsistent mapped laboratory units.",
+      call. = FALSE
+    )
+  }
+
+  mapped_visitnum <- parse_numeric(
+    mapped_lb$VISITNUM,
+    "VISITNUM"
+  )
+
+  if (any(mapped_visitnum < 0)) {
+    stop(
+      "Mapped VISITNUM must be non-negative.",
+      call. = FALSE
+    )
+  }
+
+  # Preserve the original numeric storage type when possible.
+  if (
+    is.integer(raw_data$visitnum) &&
+    all(mapped_visitnum == trunc(mapped_visitnum)) &&
+    all(mapped_visitnum <= .Machine$integer.max)
+  ) {
+    mapped_visitnum <- as.integer(mapped_visitnum)
+  }
+
+  # -------------------------------------------------------
+  # 9. Standardize mapped results and reference ranges
+  # -------------------------------------------------------
+
+  mapped_result <- parse_numeric(
+    mapped_lb$LBORRES,
+    "LBORRES"
+  )
+
+  mapped_lower <- parse_numeric(
+    mapped_lb$LBORNRLO,
+    "LBORNRLO"
+  )
+
+  mapped_upper <- parse_numeric(
+    mapped_lb$LBORNRHI,
+    "LBORNRHI"
+  )
+
+  if (any(mapped_lower > mapped_upper)) {
+    stop(
+      "Mapped lower reference limits exceed upper limits.",
+      call. = FALSE
+    )
+  }
+
+  # All supported synthetic laboratory units already
+  # correspond to their standardized units.
+  # No unit conversion is required.
+
+  standardized_numeric <- mapped_result
+
+  standardized_lower <- mapped_lower
+
+  standardized_upper <- mapped_upper
+
+  # -------------------------------------------------------
+  # 10. Derive normal-range indicators
+  # -------------------------------------------------------
+
+  normal_indicator <- ifelse(
+
+    standardized_numeric < standardized_lower,
+
+    "LOW",
+
+    ifelse(
+      standardized_numeric > standardized_upper,
+      "HIGH",
+      "NORMAL"
+    )
+  )
+
+  # -------------------------------------------------------
+  # 11. Validate mapped collection dates
+  # -------------------------------------------------------
+
+  mapped_dates <- suppressWarnings(
+    as.Date(
+      mapped_lb$LBDTC,
+      format = "%Y-%m-%d"
+    )
+  )
+
+  valid_mapped_dates <-
+    grepl(
+      "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      mapped_lb$LBDTC
+    ) &
+    !is.na(mapped_dates) &
+    format(
+      mapped_dates,
+      "%Y-%m-%d"
+    ) == mapped_lb$LBDTC
+
+  valid_mapped_dates[
+    is.na(valid_mapped_dates)
+  ] <- FALSE
+
+  if (!all(valid_mapped_dates)) {
+    stop(
+      "Mapped LBDTC must contain valid YYYY-MM-DD dates.",
+      call. = FALSE
+    )
+  }
+
+  # -------------------------------------------------------
+  # 12. Derive study days relative to DM.RFSTDTC
   # -------------------------------------------------------
 
   reference_dates <- suppressWarnings(
@@ -326,61 +758,106 @@ raw_data$collection_date <- as.character(
     nrow(raw_data)
   )
 
-  has_reference <- !is.na(reference_dates)
+  has_reference <- !is.na(
+    reference_dates
+  )
 
   differences <- as.integer(
-    collection_dates[has_reference] -
+
+    mapped_dates[has_reference] -
       reference_dates[has_reference]
   )
 
   study_days[has_reference] <- ifelse(
+
     differences >= 0L,
+
     differences + 1L,
+
     differences
   )
 
   # -------------------------------------------------------
-  # 9. Assemble LB dataset
+  # 13. Assemble final LB dataset
   # -------------------------------------------------------
 
   lb <- data.frame(
-    STUDYID = dm$STUDYID[dm_index],
-    DOMAIN = rep("LB", nrow(raw_data)),
+
+    STUDYID = mapped_lb$STUDYID,
+
+    DOMAIN = mapped_lb$DOMAIN,
+
     USUBJID = dm$USUBJID[dm_index],
-    LBSEQ = rep(NA_integer_, nrow(raw_data)),
-    LBTESTCD = test_dictionary$LBTESTCD[test_index],
-    LBTEST = test_dictionary$LBTEST[test_index],
-    LBCAT = test_dictionary$LBCAT[test_index],
-    LBSPEC = test_dictionary$LBSPEC[test_index],
-    VISIT = raw_data$visit,
-    VISITNUM = raw_data$visitnum,
-    LBORRES = as.character(raw_data$result),
-    LBORRESU = raw_data$unit,
-    LBSTRESC = as.character(standardized_numeric),
+
+    LBSEQ = rep(
+      NA_integer_,
+      nrow(raw_data)
+    ),
+
+    LBTESTCD = mapped_lb$LBTESTCD,
+
+    LBTEST = mapped_lb$LBTEST,
+
+    LBCAT = mapped_lb$LBCAT,
+
+    LBSPEC = mapped_lb$LBSPEC,
+
+    VISIT = mapped_lb$VISIT,
+
+    VISITNUM = mapped_visitnum,
+
+    LBORRES = mapped_lb$LBORRES,
+
+    LBORRESU = mapped_lb$LBORRESU,
+
+    LBSTRESC = as.character(
+      standardized_numeric
+    ),
+
     LBSTRESN = standardized_numeric,
-    LBSTRESU = expected_units,
-    LBORNRLO = lower_numeric,
-    LBORNRHI = upper_numeric,
+
+    LBSTRESU = mapped_units,
+
+    LBORNRLO = mapped_lower,
+
+    LBORNRHI = mapped_upper,
+
     LBSTNRLO = standardized_lower,
+
     LBSTNRHI = standardized_upper,
+
     LBNRIND = normal_indicator,
-    LBDTC = format(collection_dates, "%Y-%m-%d"),
+
+    LBDTC = format(
+      mapped_dates,
+      "%Y-%m-%d"
+    ),
+
     LBDY = study_days,
+
     stringsAsFactors = FALSE
   )
 
   # -------------------------------------------------------
-  # 10. Deterministic record ordering and LBSEQ
+  # 14. Deterministic record ordering and LBSEQ
   # -------------------------------------------------------
 
   ordering <- order(
+
     lb$USUBJID,
+
     lb$VISITNUM,
+
     lb$LBTESTCD,
+
     raw_data$lab_id
   )
 
-  lb <- lb[ordering, , drop = FALSE]
+  lb <- lb[
+    ordering,
+    ,
+    drop = FALSE
+  ]
 
   lb$LBSEQ <- as.integer(
     sequence(
@@ -391,10 +868,19 @@ raw_data$collection_date <- as.character(
   rownames(lb) <- NULL
 
   # -------------------------------------------------------
-  # 11. Final structural checks
+  # 15. Final structural checks
   # -------------------------------------------------------
 
-  if (anyDuplicated(lb[c("USUBJID", "LBSEQ")])) {
+  if (nrow(lb) != nrow(raw_data)) {
+    stop(
+      "Raw and LB record counts do not match.",
+      call. = FALSE
+    )
+  }
+
+  if (anyDuplicated(
+    lb[c("USUBJID", "LBSEQ")]
+  )) {
     stop(
       "Duplicate LB primary keys detected.",
       call. = FALSE
@@ -407,6 +893,10 @@ raw_data$collection_date <- as.character(
       call. = FALSE
     )
   }
+
+  # -------------------------------------------------------
+  # 16. Return generated LB dataset
+  # -------------------------------------------------------
 
   lb
 }

@@ -1,0 +1,12 @@
+
+domain,source_variable,target_variable,transformation,parameter,required
+AE,NA,STUDYID,study_id,NA,TRUE
+AE,NA,DOMAIN,constant,AE,TRUE
+AE,event_term,AETERM,direct,NA,TRUE
+AE,event_term,AEDECOD,terminology_map,term,TRUE
+AE,severity,AESEV,terminology_map,severity,TRUE
+AE,serious,AESER,terminology_map,serious,TRUE
+AE,relationship,AEREL,terminology_map,relationship,TRUE
+AE,outcome,AEOUT,terminology_map,outcome,TRUE
+AE,start_date,AESTDTC,direct,NA,TRUE
+AE,end_date,AEENDTC,direct,NA,FALSE

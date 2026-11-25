@@ -1,0 +1,14 @@
+domain,source_variable,target_variable,transformation,parameter,required
+LB,NA,STUDYID,study_id,NA,TRUE
+LB,NA,DOMAIN,constant,LB,TRUE
+LB,lab_test,LBTESTCD,direct,NA,TRUE
+LB,lab_test,LBTEST,terminology_map,lb_test,TRUE
+LB,lab_test,LBCAT,terminology_map,lb_category,TRUE
+LB,lab_test,LBSPEC,terminology_map,lb_specimen,TRUE
+LB,visit,VISIT,direct,NA,TRUE
+LB,visitnum,VISITNUM,numeric,NA,TRUE
+LB,result,LBORRES,direct,NA,TRUE
+LB,unit,LBORRESU,direct,NA,TRUE
+LB,lower_limit,LBORNRLO,numeric,NA,TRUE
+LB,upper_limit,LBORNRHI,numeric,NA,TRUE
+LB,collection_date,LBDTC,direct,NA,TRUE

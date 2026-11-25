@@ -1,0 +1,11 @@
+
+domain,source_variable,target_variable,transformation,parameter,required
+VS,NA,STUDYID,study_id,NA,TRUE
+VS,NA,DOMAIN,constant,VS,TRUE
+VS,test_code,VSTESTCD,direct,NA,TRUE
+VS,test_code,VSTEST,terminology_map,vs_test,TRUE
+VS,visit,VISIT,direct,NA,TRUE
+VS,visitnum,VISITNUM,numeric,NA,TRUE
+VS,result,VSORRES,direct,NA,TRUE
+VS,unit,VSORRESU,direct,NA,TRUE
+VS,assessment_date,VSDTC,direct,NA,TRUE

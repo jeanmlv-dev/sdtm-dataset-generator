@@ -4,12 +4,16 @@
 \alias{generate_vs}
 \title{Generate an SDTM-like Vital Signs Dataset}
 \usage{
-generate_vs(raw_data, dm)
+generate_vs(raw_data, dm, mapping_path = NULL)
 }
 \arguments{
 \item{raw_data}{A data.frame of raw vital signs measurements.}
 
 \item{dm}{A previously generated DM dataset.}
+
+\item{mapping_path}{Optional path to a metadata mapping CSV file.
+When NULL, the legacy VS generation logic is used.
+When provided, the metadata-driven mapping workflow is enabled.}
 }
 \value{
 A tibble containing mapped VS variables.
@@ -17,4 +21,32 @@ A tibble containing mapped VS variables.
 \description{
 Maps synthetic vital signs measurements into a standardized
 vertical VS dataset, linked to a validated DM dataset.
+}
+\details{
+Supports both legacy programmatic mapping and declarative
+metadata-driven mapping while preserving clinical derivations
+and structural integrity.
+
+Required raw columns:
+subject_id, site_id, visit, visitnum, test_code,
+result, unit, assessment_date.
+
+Supported vital signs tests include systolic and diastolic
+blood pressure, heart rate, temperature, weight and height.
+
+Temperature measurements in Fahrenheit are converted to Celsius
+for standardized results.
+
+Subject identifiers are linked to the supplied DM dataset.
+Duplicate source assessments are rejected.
+
+Study days are derived relative to DM.RFSTDTC.
+VSSEQ is assigned deterministically within each subject.
+
+Metadata-driven mapping controls declarative variable mappings.
+Clinical derivations, unit conversions and subject linkage
+remain programmatically controlled.
+
+This function generates SDTM-like datasets for demonstration
+purposes and does not establish full CDISC SDTM compliance.
 }

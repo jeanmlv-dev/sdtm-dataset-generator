@@ -4,12 +4,16 @@
 \alias{generate_ae}
 \title{Generate an SDTM-like Adverse Events (AE) Dataset}
 \usage{
-generate_ae(raw_data, dm)
+generate_ae(raw_data, dm, mapping_path = NULL)
 }
 \arguments{
 \item{raw_data}{A data.frame containing raw adverse events.}
 
 \item{dm}{A data.frame containing the generated DM dataset.}
+
+\item{mapping_path}{Optional path to a metadata mapping CSV file.
+When NULL, the legacy AE generation logic is used.
+When provided, the metadata-driven mapping workflow is enabled.}
 }
 \value{
 A tibble containing mapped AE variables.
